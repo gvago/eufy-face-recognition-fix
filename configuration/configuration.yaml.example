@@ -1,0 +1,42 @@
+# Add these sections to your Home Assistant configuration.yaml
+
+# Face recognition integration
+rest_command:
+  recognize_doorbell_face:
+    url: "http://localhost:8099/recognize"
+    method: POST
+    timeout: 30
+
+# Shell command for processing face recognition
+shell_command:
+  analyze_face_recognition: >
+    curl -X POST "http://localhost:8099/recognize" \
+    -F "file=@/config/www/doorbell_snapshot.jpg" \
+    | jq -r '.faces[0].name // "unknown"' \
+    | while read result; do 
+        curl -X POST "http://localhost:8123/api/services/input_text/set_value" \
+        -H "Authorization: Bearer YOUR_LONG_LIVED_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d "{\"entity_id\": \"input_text.face_recognition_result\", \"value\": \"$result\"}"; 
+      done
+
+# Sensors
+sensor:
+  - platform: rest
+    resource: http://localhost:8099/health
+    name: face_recognition_status
+    scan_interval: 60
+    timeout: 15
+    value_template: "{{ value_json.status if value_json else 'offline' }}"
+    json_attributes:
+      - known_faces
+
+# Input helpers
+input_text:
+  face_recognition_result:
+    name: "Face Recognition Result"
+
+input_boolean:
+  auto_voice_response_enabled:
+    name: "Auto Voice Response Enabled"
+    icon: mdi:account-voice
