@@ -1,0 +1,56 @@
+alias: Auto Voice Response - Face Recognition Enhanced
+description: Play voice message when unknown person detected, no ring
+triggers:
+  - entity_id: binary_sensor.doorbell_person_detected
+    to: "on"
+    trigger: state
+conditions:
+  - condition: and
+    conditions:
+      - condition: state
+        entity_id: input_boolean.auto_voice_response_enabled
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.doorbell_ringing
+        state: "off"
+      - condition: state
+        entity_id: sensor.face_recognition_status
+        state: "healthy"
+      - condition: template
+        value_template: >-
+          {% set last_triggered = state_attr('automation.auto_voice_response_face_recognition_enhanced', 'last_triggered') %}
+          {% if last_triggered %}
+            {{ (now() - last_triggered).total_seconds() > 300 }}
+          {% else %}
+            true
+          {% endif %}
+actions:
+  - action: camera.snapshot
+    target:
+      entity_id: camera.doorbell
+    data:
+      filename: /config/www/doorbell_snapshot.jpg
+  
+  - delay: 1
+  
+  - action: shell_command.analyze_face_recognition
+  
+  - delay: 3
+  
+  - condition: template
+    value_template: >-
+      {{ states('input_text.face_recognition_result') in ['unknown', 'error'] }}
+  
+  - action: eufy_security.quick_response
+    target:
+      entity_id: camera.doorbell
+    data:
+      voice_id: 102
+  
+  - action: logbook.log
+    data:
+      name: "Doorbell Face Recognition"
+      message: "Unknown person detected - voice response sent"
+      entity_id: camera.doorbell
+
+mode: single
